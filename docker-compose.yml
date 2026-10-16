@@ -1,0 +1,71 @@
+# Local stack:  docker compose up --build            -> dashboard on http://localhost:8080
+# Run pipeline: docker compose --profile pipeline run --rm pipeline
+# MLflow UI:    docker compose --profile mlflow up mlflow  -> http://localhost:5000
+name: demand-engine
+
+x-backend: &backend
+  build: .
+  image: demand-engine:latest
+  environment:
+    DATABASE__URL: postgresql+psycopg://demand:demand@db:5432/demand
+    MLFLOW_TRACKING_URI: sqlite:////app/artifacts/mlflow.db
+    LOG_LEVEL: INFO
+  volumes:
+    - ./data:/app/data
+    - ./artifacts:/app/artifacts
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: demand
+      POSTGRES_PASSWORD: demand
+      POSTGRES_DB: demand
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demand -d demand"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    <<: *backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  pipeline:
+    <<: *backend
+    profiles: ["pipeline"]
+    command: ["demand-engine", "run-all"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  mlflow:
+    image: python:3.11-slim
+    profiles: ["mlflow"]
+    command: >
+      sh -c "pip install --quiet mlflow==3.17.1 &&
+             mlflow ui --host 0.0.0.0 --port 5000
+             --backend-store-uri sqlite:////app/artifacts/mlflow.db"
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./artifacts:/app/artifacts  # same path as the pipeline => artifact links resolve
+
+volumes:
+  pgdata:

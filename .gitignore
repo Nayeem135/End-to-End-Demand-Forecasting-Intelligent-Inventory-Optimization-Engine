@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Project runtime outputs (never commit data / models)
+data/
+!data/.gitkeep
+mlruns/
+mlflow.db
+artifacts/
+*.parquet
+
+# Env / secrets
+.env
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
