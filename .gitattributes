@@ -1,0 +1,4 @@
+# Keep LF everywhere so files baked into Linux images and CI behave identically.
+* text=auto eol=lf
+*.png binary
+*.ipynb text eol=lf
