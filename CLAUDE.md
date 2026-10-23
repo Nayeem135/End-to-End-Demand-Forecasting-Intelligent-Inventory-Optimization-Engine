@@ -33,7 +33,9 @@ baseline."* Every number must be reproducible from one command.
   larger default because the reported results are computed on it.
 - Raw wide CSVs are converted once to a long-format Parquet table
   (`item_id, store_id, date, sales, sell_price, calendar features`) in
-  `data/processed/`. The pipelines read Parquet. PostgreSQL stores **results**
+  `data/processed/` (`ds` = date, `y` = units sold, key `unique_id` = item + store), and
+  validated against the pandera `DEMAND_SCHEMA`. Ingest also writes a short data-quality
+  summary, `data/processed/quality_report.json` (and logs it). The pipelines read Parquet. PostgreSQL stores **results**
   (series metadata, forecasts, policies, simulation runs), not the raw sales.
 - Tests never need the real dataset: `tests/fixtures` provides a synthetic
   generator for M5-shaped data.
@@ -72,7 +74,7 @@ baseline."* Every number must be reproducible from one command.
 │   ├── config.py                 # pydantic-settings Settings (the only source of paths/params)
 │   ├── logging_config.py         # logging setup (not logging.py: avoid shadowing stdlib)
 │   ├── types.py                  # FloatArray/IntArray aliases, typed `cell()` accessor
-│   ├── data/                     # loader, subset, transform, validation, splits, synthetic
+│   ├── data/                     # loader, subset, transform, validation, quality, splits, synthetic
 │   ├── features/                 # calendar, price, lags (>= horizon), origin (horizon-aware), builder
 │   ├── models/                   # base (Forecaster contract), statistical, lgbm, registry
 │   ├── evaluation/               # metrics, backtest (rolling origin), explain (SHAP)

@@ -48,3 +48,9 @@ def test_calendar_without_d_column_rejects_gaps(tmp_path: Path) -> None:
     pd.DataFrame({"date": ["2011-01-29", "2011-02-02"]}).to_csv(path, index=False)
     with pytest.raises(ValueError, match="contiguous"):
         read_calendar(path)
+
+
+def test_prices_keep_cent_precision(raw_dir: Path) -> None:
+    prices = load_m5(raw_dir, state="CA").prices
+    assert prices["sell_price"].dtype == "float64"
+    assert (prices["sell_price"] == prices["sell_price"].round(2)).all()

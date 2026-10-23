@@ -15,7 +15,10 @@ series, ~1.4 M rows. Everything is controlled by `DATA__STATE`, `DATA__N_ITEMS`,
 zeros before an item's first sale (not real demand), forward-fill prices within a series,
 drop series with fewer than 180 days of history before the first cut-off. A validator
 enforces the contract: no nulls, non-negative demand, positive prices, unique keys,
-contiguous dates.
+contiguous dates (a pandera schema). Ingestion writes a data-quality summary
+(`data/processed/quality_report.json`): for the default subset 1,961 of 2,000 selected
+series are kept, 56 % of series-days have zero sales, prices range from $0.01 (as found in the raw
+M5 price file) to $28.96, and 73 % of series are intermittent.
 
 **Demand classes** (Syntetos–Boylan): ADI (average inter-demand interval) and CV² of
 non-zero sizes classify each series as smooth / erratic / intermittent / lumpy. Most M5
@@ -70,7 +73,7 @@ Fixed lags ≥ 28 days let one model forecast all 28 days directly (no recursion
 discard the most recent month for short horizons. Origin features restore that
 information *without leakage*: each training row receives a random horizon (seeded),
 and the feature values are read at `t − h`. This single change improved validation
-WRMSSE from 0.820 to 0.799 and made LightGBM's lead-time (7-day cumulative) error 8 %
+WRMSSE from 0.820 to 0.800 and made LightGBM's lead-time (7-day cumulative) error 8 %
 smaller than the moving average's.
 
 **Leakage tests.** For both lag and origin features, a unit test replaces all future
@@ -144,5 +147,10 @@ series, the strongest drivers of its forecast are stored and shown in the dashbo
   conclusions depend on them).
 * Safety stock assumes approximately normal cumulative errors; intermittent items are
   skewed. An empirical-quantile buffer is a natural extension.
+* Results come from a single LightGBM fit. Its advantage over the moving average is
+  consistent in direction at every service level, but at high targets it is small enough to
+  sit within fit-to-fit variation: two runs differing only in price rounding (float32 vs
+  exact cents) gave 0.79 % and 0.36 % at the 95 % target. Averaging several seeds would
+  narrow this.
 * The test period (spring 2016) has slight demand growth that all models under-forecast;
   the bias correction mitigates but cannot fully remove this.

@@ -13,15 +13,18 @@ served through a FastAPI backend and a React dashboard with a live what-if simul
 
 | | Rule of thumb | Moving avg + safety stock | **Forecast-driven (LightGBM)** |
 |---|---:|---:|---:|
-| Total simulated cost | $279,774 | $65,361 | **$64,846** |
+| Total simulated cost | $279,774 | $65,361 | **$65,126** |
 | Fill rate | 84.2 % | 98.6 % | **98.6 %** |
-| Orders placed | 14,674 | 3,083 | **3,075** |
+| Orders placed | 14,674 | 3,083 | **3,073** |
 
-* **Inventory optimisation saves 76.8 %** of total cost versus a typical min/max rule while
+* **Inventory optimisation saves 76.7 %** of total cost versus a typical min/max rule while
   lifting the fill rate from 84.2 % to 98.6 %.
-* **Better forecasts save a further 0.25–5.1 %** at every target service level (0.8 % at the
-  default 95 %) — measured fairly: both policies are identical except for the forecast.
-* **LightGBM is the most accurate of seven models**: test WRMSSE 0.834 vs 0.865 (ETS) and
+* **Better forecasts make the same policy cheaper at every target service level** — by
+  ≈ 5 % at an 80 % target, shrinking to 0.1–0.4 % at 95 % and above (0.4 % at the default).
+  Measured fairly: both policies are identical except for the forecast. At high targets the
+  gain is within the run-to-run sensitivity of a single LightGBM fit, so the robust claim is
+  the direction and the trend, not the exact decimal.
+* **LightGBM is the most accurate of seven models**: test WRMSSE 0.835 vs 0.865 (ETS) and
   0.870 (moving average); 80 % prediction intervals cover 86.8 % of actuals.
 
 The full reasoning — including two evaluation pitfalls found and fixed along the way —

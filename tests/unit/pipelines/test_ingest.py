@@ -1,3 +1,6 @@
+import json
+
+import pandas as pd
 import pytest
 
 from demand_engine.config import Settings
@@ -10,6 +13,9 @@ def test_run_ingest_writes_validated_subset(test_settings: Settings) -> None:
     write_synthetic_m5(test_settings.paths.raw_dir, n_items=12, n_days=420, seed=4)
     path = run_ingest(test_settings)
     assert path.is_file()
+    report = json.loads((path.parent / "quality_report.json").read_text(encoding="utf-8"))
+    assert report["n_rows"] == len(pd.read_parquet(path))
+    assert report["series_selected"] >= report["n_series"] > 0
     df = load_demand_table(test_settings)
     validate_long(df)
     assert df["item_id"].nunique() <= test_settings.data.n_items

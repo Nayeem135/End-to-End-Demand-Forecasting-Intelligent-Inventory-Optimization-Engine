@@ -22,7 +22,7 @@ value by simulating 12 weeks of demand the models never saw."
 
 ## 2. Overview page — 1 min
 
-* **76.8 % cost saving, fill rate 84 % → 98.6 %** versus a min/max rule of thumb.
+* **76.7 % cost saving, fill rate 84 % → 98.6 %** versus a min/max rule of thumb.
 * Point at the stacked bars: the rule of thumb loses money on **stock-outs** and on
   **too many small orders**; the optimised policies hold more stock but far fewer orders.
 * The trade-off chart: the ML policy is cheaper at every service level.
@@ -46,15 +46,15 @@ value by simulating 12 weeks of demand the models never saw."
 ## 5. What-if — 1.5 min (the "wow" moment)
 
 * Drag **lead time** from 7 → 14 days: ~2,000 policies are recomputed and 12 weeks
-  re-simulated in about half a second; the ML advantage grows (≈ 1.5 %) because longer
+  re-simulated in about half a second; the ML advantage grows (≈ 1.4 %) because longer
   lead times make forecast accuracy matter more.
 * Lower the **cost per order** to $2: orders become more frequent, again rewarding
-  better forecasts. Press *Reset*.
+  better forecasts (≈ 2.1 %). Press *Reset*.
 
 ## 6. Models page — 1 min
 
 * Seven models, rolling-origin backtesting; champion chosen on **validation**, test shown
-  for honesty. LightGBM: WRMSSE 0.834 vs 0.870 for the moving average.
+  for honesty. LightGBM: WRMSSE 0.835 vs 0.870 for the moving average.
 * Global SHAP: the horizon-aware origin features dominate — the design decision that took
   LightGBM from "no better than a moving average" to clearly best.
 
@@ -72,7 +72,7 @@ uv run pytest -q          # 200+ tests, incl. real PostgreSQL, in ~30 s
 
 | Question | Answer |
 |---|---|
-| Why is the ML gain only 0.8 % at 95 %? | Lot sizes are large (EOQ ≈ weeks of cover), so most cost is structural; forecasts change *when* to reorder. The gain grows with lead time, lower service targets and cheaper ordering — the what-if page shows it. Daily accuracy (4 % better WRMSSE) only partly transfers to 7-day cumulative error (8 % lower σ). |
+| Why is the ML gain only ≈ 0.4 % at 95 %? | Lot sizes are large (EOQ ≈ weeks of cover), so most cost is structural; forecasts change *when* to reorder. The gain grows with lead time, lower service targets and cheaper ordering — the what-if page shows it. Daily accuracy (4 % better WRMSSE) only partly transfers to 7-day cumulative error (8 % lower σ). |
 | How do you know there is no leakage? | Lags ≥ horizon, origin features read only data at `t − h`, a test randomises all future targets and asserts identical features; policies may only use forecasts issued before each simulated day. |
 | What went wrong during the project? | (1) A static baseline reorder point averaged forecasts from *future* windows — look-ahead bias that flattered the baseline. (2) A zero 28-day forecast collapsed EOQ to 1 unit, flattering ML. Both fixed; the comparison is now strictly like-for-like. |
 | Why not deep learning? | M5 winners were LightGBM ensembles; on a laptop-sized subset trees train in ~100 s, explain exactly (TreeSHAP) and need no GPU. |

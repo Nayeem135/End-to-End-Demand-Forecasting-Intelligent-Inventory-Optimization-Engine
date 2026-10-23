@@ -88,7 +88,8 @@ def read_prices(path: Path, stores: list[str]) -> pd.DataFrame:
         chunk[chunk["store_id"].isin(stores)]
         for chunk in pd.read_csv(
             path,
-            dtype={"wm_yr_wk": "int32", "sell_price": "float32"},
+            # float64: float32 would turn $9.58 into 9.5799999 once widened downstream.
+            dtype={"wm_yr_wk": "int32", "sell_price": "float64"},
             chunksize=500_000,
         )
     ]
