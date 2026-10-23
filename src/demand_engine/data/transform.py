@@ -98,7 +98,37 @@ def filter_short_series(
     return long[long[UNIQUE_ID].isin(keep)].reset_index(drop=True)
 
 
-def classify_intermittency(y: FloatArray, adi_cut: float = 1.32, cv2_cut: float = 0.49) -> str:
+ADI_CUT = 1.32
+CV2_CUT = 0.49
+
+
+def demand_profile(y: FloatArray) -> tuple[float, float]:
+    """Average inter-demand interval (ADI) and squared CV of non-zero demand sizes.
+
+    ``ADI = periods / periods with demand``; ``CV² = (std / mean)²`` of the non-zero
+    values (0 when fewer than two non-zero periods). A series with no demand returns
+    ``(inf, 0.0)``.
+    """
+    nonzero = y[y > 0]
+    if nonzero.size == 0:
+        return float("inf"), 0.0
+    adi = y.size / nonzero.size
+    cv2 = float((nonzero.std() / nonzero.mean()) ** 2) if nonzero.size > 1 else 0.0
+    return float(adi), cv2
+
+
+def classify_profile(
+    adi: float, cv2: float, adi_cut: float = ADI_CUT, cv2_cut: float = CV2_CUT
+) -> str:
+    """Syntetos-Boylan class for given ADI and CV² (see :func:`classify_intermittency`)."""
+    if adi < adi_cut:
+        return "smooth" if cv2 < cv2_cut else "erratic"
+    return "intermittent" if cv2 < cv2_cut else "lumpy"
+
+
+def classify_intermittency(
+    y: FloatArray, adi_cut: float = ADI_CUT, cv2_cut: float = CV2_CUT
+) -> str:
     """Classify a demand series using the Syntetos-Boylan ADI/CV² scheme.
 
     Args:
@@ -107,13 +137,9 @@ def classify_intermittency(y: FloatArray, adi_cut: float = 1.32, cv2_cut: float 
         cv2_cut: Squared coefficient of variation threshold (non-zero demand sizes).
 
     Returns:
-        One of ``"smooth"``, ``"erratic"``, ``"intermittent"``, ``"lumpy"``.
+        One of ``"smooth"``, ``"erratic"``, ``"intermittent"``, ``"lumpy"``; a series
+        without any demand is ``"lumpy"``.
     """
-    nonzero = y[y > 0]
-    if nonzero.size == 0:
+    if not (y > 0).any():
         return "lumpy"
-    adi = y.size / nonzero.size
-    cv2 = float((nonzero.std() / nonzero.mean()) ** 2) if nonzero.size > 1 else 0.0
-    if adi < adi_cut:
-        return "smooth" if cv2 < cv2_cut else "erratic"
-    return "intermittent" if cv2 < cv2_cut else "lumpy"
+    return classify_profile(*demand_profile(y), adi_cut=adi_cut, cv2_cut=cv2_cut)

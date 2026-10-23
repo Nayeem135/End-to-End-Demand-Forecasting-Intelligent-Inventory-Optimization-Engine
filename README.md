@@ -97,6 +97,7 @@ src/demand_engine/   data · features · models · evaluation · optimization ·
 frontend/            React dashboard
 tests/               unit (mirrors src) + integration (PostgreSQL, API, end-to-end)
 notebooks/           01_eda (data insights) · 02_results (accuracy, SHAP, inventory value)
+docs/figures/        EDA figures for the report (written by 01_eda)
 docs/                architecture · methodology · demo script · implementation plan
 ```
 

@@ -6,7 +6,9 @@ from demand_engine.data.schema import LONG_COLUMNS
 from demand_engine.data.synthetic import SyntheticM5
 from demand_engine.data.transform import (
     classify_intermittency,
+    classify_profile,
     day_columns,
+    demand_profile,
     filter_short_series,
     to_long,
     trim_leading_zeros,
@@ -72,3 +74,19 @@ def test_filter_short_series() -> None:
 )
 def test_classify_intermittency(y: list[int], expected: str) -> None:
     assert classify_intermittency(np.array(y, dtype=float)) == expected
+
+
+def test_demand_profile_hand_computed() -> None:
+    adi, cv2 = demand_profile(np.array([0.0, 2.0, 0.0, 4.0]))
+    assert adi == 2.0
+    assert cv2 == pytest.approx((1.0 / 3.0) ** 2)  # std 1, mean 3
+    assert demand_profile(np.array([0.0, 5.0])) == (2.0, 0.0)
+    assert demand_profile(np.zeros(3)) == (float("inf"), 0.0)
+
+
+@pytest.mark.parametrize(
+    ("adi", "cv2", "expected"),
+    [(1.0, 0.1, "smooth"), (1.0, 0.9, "erratic"), (2.0, 0.1, "intermittent"), (2.0, 0.9, "lumpy")],
+)
+def test_classify_profile_quadrants(adi: float, cv2: float, expected: str) -> None:
+    assert classify_profile(adi, cv2) == expected

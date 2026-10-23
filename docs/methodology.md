@@ -15,7 +15,8 @@ series, ~1.4 M rows. Everything is controlled by `DATA__STATE`, `DATA__N_ITEMS`,
 zeros before an item's first sale (not real demand), forward-fill prices within a series,
 drop series with fewer than 180 days of history before the first cut-off. A validator
 enforces the contract: no nulls, non-negative demand, positive prices, unique keys,
-contiguous dates (a pandera schema). Ingestion writes a data-quality summary
+contiguous dates (a pandera schema). The exploratory analysis (`notebooks/01_eda.ipynb`,
+figures in `docs/figures/`) motivates the feature and model choices below. Ingestion writes a data-quality summary
 (`data/processed/quality_report.json`): for the default subset 1,961 of 2,000 selected
 series are kept, 56 % of series-days have zero sales, prices range from $0.01 (as found in the raw
 M5 price file) to $28.96, and 73 % of series are intermittent.
@@ -152,5 +153,6 @@ series, the strongest drivers of its forecast are stored and shown in the dashbo
   sit within fit-to-fit variation: two runs differing only in price rounding (float32 vs
   exact cents) gave 0.79 % and 0.36 % at the 95 % target. Averaging several seeds would
   narrow this.
-* The test period (spring 2016) has slight demand growth that all models under-forecast;
+* Demand grows ≈ 10 % a year (≈ 5 % like-for-like, the rest from items that start selling
+  during the period; see `notebooks/01_eda.ipynb` §1), which all models under-forecast slightly;
   the bias correction mitigates but cannot fully remove this.
