@@ -12,12 +12,12 @@ htmlcov/
 dist/
 build/
 
-# Project runtime outputs (never commit data / models)
-data/
-!data/.gitkeep
-mlruns/
-mlflow.db
-artifacts/
+# Project runtime outputs (never commit data / models).
+# Anchored with a leading "/": an unanchored "data/" also matched src/demand_engine/data/.
+/data/
+/mlruns/
+/mlflow.db
+/artifacts/
 *.parquet
 
 # Env / secrets
