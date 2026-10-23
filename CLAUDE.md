@@ -4,6 +4,9 @@ University final-year project. It must demonstrate **both** data science and
 software engineering, be bug-free, and run reliably in a live defence demo on a
 laptop.
 
+**Constraints:** 7-day build. Keep the end-to-end system working at all times;
+**add no features the user did not ask for** — propose them instead.
+
 ## Project goal
 
 1. **Forecast** daily unit demand for every SKU-store pair, with uncertainty
@@ -23,9 +26,11 @@ baseline."* Every number must be reproducible from one command.
 - Files: `sales_train_evaluation.csv`, `calendar.csv`, `sell_prices.csv`
   (Kaggle "M5 Forecasting - Accuracy"). The user downloads them manually into
   `data/raw/`. Never commit data.
-- **Configurable subset**: by default, one state (`CA`) and about 500 items,
-  sampled reproducibly with a fixed seed and stratified by category. All of this
-  is set in config (`DATA__STATE`, `DATA__N_ITEMS`, `DATA__SEED`).
+- **Configurable subset**: by default, one state (`CA`, all 4 stores) and 500 items,
+  sampled reproducibly with the global seed and stratified by category (`DATA__STATE`,
+  `DATA__STORES`, `DATA__N_ITEMS`, `SEED`). A single store with ~150 items is one config
+  change away (`DATA__STORES=["CA_1"]`, `DATA__N_ITEMS=150`); the user chose to keep the
+  larger default because the reported results are computed on it.
 - Raw wide CSVs are converted once to a long-format Parquet table
   (`item_id, store_id, date, sales, sell_price, calendar features`) in
   `data/processed/`. The pipelines read Parquet. PostgreSQL stores **results**
@@ -38,7 +43,7 @@ baseline."* Every number must be reproducible from one command.
 | Area | Tools |
 |---|---|
 | Language / deps | Python 3.11, `uv` (`pyproject.toml` + `uv.lock`) |
-| Data / features | pandas, pyarrow, numpy |
+| Data / features | pandas, pyarrow, numpy, pandera (demand-table schema in `data/validation.py`) |
 | Forecasting | `statsforecast` (baselines, ETS, Croston/TSB/ADIDA), LightGBM |
 | Explainability | SHAP (TreeExplainer on LightGBM) |
 | Tracking | MLflow (SQLite store `artifacts/mlflow.db`; UI via Compose profile `mlflow`) |
@@ -46,6 +51,8 @@ baseline."* Every number must be reproducible from one command.
 | Config | `pydantic-settings` (`.env` plus env vars, nested via `__`) |
 | Quality | pytest (+ pytest-cov), ruff (lint + format), mypy (strict) |
 | Frontend | React 19, TypeScript (strict), Vite, Tailwind CSS 4, Recharts, Vitest, oxlint |
+| Streamlit app | `app/streamlit_app.py` — reads Parquet artifacts directly (no DB/API needed) |
+| Dev tooling | GNU Make (`Makefile`), pre-commit (`.pre-commit-config.yaml`: ruff, mypy, hygiene hooks) |
 | Infra | Docker Compose (db, api, frontend; `pipeline`/`mlflow` profiles), GitHub Actions CI, embedded PostgreSQL (`pgserver`) for Docker-free demos/tests |
 
 ## Repository structure (src layout)
@@ -56,6 +63,8 @@ baseline."* Every number must be reproducible from one command.
 ├── README.md
 ├── pyproject.toml / uv.lock
 ├── alembic.ini                   # URL comes from settings, never stored here
+├── Makefile                      # setup, data, train, test, lint, api, app
+├── .pre-commit-config.yaml / .streamlit/config.toml
 ├── Dockerfile / docker-compose.yml / .dockerignore
 ├── .env.example                  # every setting documented; real .env is git-ignored
 ├── .github/workflows/ci.yml
@@ -71,6 +80,7 @@ baseline."* Every number must be reproducible from one command.
 │   ├── api/                      # main (app factory), routes, schemas, repository, simulation_service
 │   │   └── db/                   # models, session, bulk (COPY), migrate, migrations/ (Alembic)
 │   └── pipelines/                # ingest, forecasting, optimize, run_all, artifacts, tracking, publish, cli
+├── app/streamlit_app.py          # Streamlit dashboard over the latest run's artifacts
 ├── frontend/                     # React + TS + Vite dashboard (own package.json, Dockerfile, nginx.conf)
 ├── notebooks/                    # 01_eda, 02_results; import from demand_engine, no logic of their own
 ├── tests/
@@ -129,6 +139,8 @@ baseline."* Every number must be reproducible from one command.
 ## Commands
 
 ```bash
+make setup | data | train | test | lint | api | app   # day-to-day entry points (see `make`)
+uv run pre-commit run --all-files                     # same checks as the git hook
 uv sync                                     # install deps (Python 3.11 venv)
 uv run ruff check . && uv run ruff format --check .
 uv run mypy                                 # strict, configured in pyproject

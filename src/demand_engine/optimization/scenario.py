@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
@@ -126,6 +126,56 @@ def build_inputs(
         champion_errors=champion_val,
         baseline_errors=baseline_val,
         champion=champion,
+    )
+
+
+def inputs_from_stored(
+    *,
+    test_start: pd.Timestamp,
+    champion: str,
+    baseline: str,
+    history: pd.DataFrame,
+    forecasts: pd.DataFrame,
+    validation: pd.DataFrame,
+    series: pd.DataFrame,
+) -> SimulationInputs:
+    """Rebuild simulator inputs from a run's *stored* tables (database or Parquet artifacts).
+
+    Only ~16 weeks of history are stored, so the per-series demand rates the pipeline
+    computed from the full history (``avg_daily_sales``, ``long_run_daily_sales``) replace
+    the ones :func:`build_inputs` would derive. This keeps every consumer (API what-if,
+    Streamlit app) numerically identical to the pipeline.
+
+    Args:
+        test_start: First day of the test period.
+        champion: Champion model name.
+        baseline: Baseline model name (moving average by default).
+        history: ``unique_id, ds, y, sell_price`` (recent history + test actuals).
+        forecasts: Test forecasts with ``model, unique_id, ds, cutoff, yhat``.
+        validation: Validation forecasts with ``model, unique_id, cutoff, ds, y, yhat``.
+        series: Catalogue with ``unique_id, avg_daily_sales, long_run_daily_sales``.
+    """
+    hist = history.assign(**{DS: pd.to_datetime(history[DS])})
+    fc = forecasts.assign(
+        **{DS: pd.to_datetime(forecasts[DS]), "cutoff": pd.to_datetime(forecasts["cutoff"])}
+    )
+    val = validation.assign(
+        **{DS: pd.to_datetime(validation[DS]), "cutoff": pd.to_datetime(validation["cutoff"])}
+    )
+    inputs = build_inputs(
+        history=hist[hist[DS] < test_start],
+        test_actuals=hist.loc[hist[DS] >= test_start, [UNIQUE_ID, DS, Y, PRICE]],
+        champion_test=fc[fc["model"] == champion],
+        baseline_test=fc[fc["model"] == baseline],
+        champion_val=val[val["model"] == champion],
+        baseline_val=val[val["model"] == baseline],
+        champion=champion,
+    )
+    rates = series.set_index(UNIQUE_ID).reindex(inputs.unique_ids)
+    return replace(
+        inputs,
+        hist_mean=rates["avg_daily_sales"].fillna(0.0).to_numpy(dtype="float64"),
+        long_run_mean=rates["long_run_daily_sales"].fillna(0.0).to_numpy(dtype="float64"),
     )
 
 

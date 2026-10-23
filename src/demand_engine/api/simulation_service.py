@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 import threading
 from collections import OrderedDict
-from dataclasses import replace
 
 import pandas as pd
 from sqlalchemy import select
@@ -19,11 +18,10 @@ from demand_engine.api import repository as repo
 from demand_engine.api.db import models as m
 from demand_engine.api.schemas import DayState, SeriesResultOut, Trajectory, WhatIfRequest
 from demand_engine.config import InventorySettings
-from demand_engine.data.schema import DS, PRICE, UNIQUE_ID, Y
 from demand_engine.optimization.scenario import (
     ScenarioResult,
     SimulationInputs,
-    build_inputs,
+    inputs_from_stored,
     run_scenario,
 )
 
@@ -43,7 +41,6 @@ def load_inputs(session: Session, run_id: str) -> tuple[SimulationInputs, Invent
             m.DemandHistory.sell_price,
         ).where(m.DemandHistory.run_id == run_id),
     )
-    hist[DS] = pd.to_datetime(hist[DS])
     fc = repo.read_frame(
         session,
         select(
@@ -54,8 +51,6 @@ def load_inputs(session: Session, run_id: str) -> tuple[SimulationInputs, Invent
             m.ForecastRow.yhat,
         ).where(m.ForecastRow.run_id == run_id),
     )
-    fc[DS] = pd.to_datetime(fc[DS])
-    fc["cutoff"] = pd.to_datetime(fc["cutoff"])
     val = repo.read_frame(
         session,
         select(
@@ -67,35 +62,20 @@ def load_inputs(session: Session, run_id: str) -> tuple[SimulationInputs, Invent
             m.ValidationForecast.yhat,
         ).where(m.ValidationForecast.run_id == run_id),
     )
-    val[DS] = pd.to_datetime(val[DS])
-    val["cutoff"] = pd.to_datetime(val["cutoff"])
-    inputs = build_inputs(
-        history=hist[hist[DS] < test_start],
-        test_actuals=hist.loc[hist[DS] >= test_start, [UNIQUE_ID, DS, Y, PRICE]],
-        champion_test=fc[fc["model"] == run.champion],
-        baseline_test=fc[fc["model"] == run.baseline_model],
-        champion_val=val[val["model"] == run.champion],
-        baseline_val=val[val["model"] == run.baseline_model],
+    series = repo.read_frame(
+        session,
+        select(
+            m.SeriesMeta.unique_id, m.SeriesMeta.avg_daily_sales, m.SeriesMeta.long_run_daily_sales
+        ).where(m.SeriesMeta.run_id == run_id),
+    )
+    inputs = inputs_from_stored(
+        test_start=test_start,
         champion=run.champion,
-    )
-    # Only ~16 weeks of history are stored, so take the per-series demand rates that the
-    # pipeline computed from the full history (keeps API what-if identical to the pipeline).
-    rates = (
-        repo.read_frame(
-            session,
-            select(
-                m.SeriesMeta.unique_id,
-                m.SeriesMeta.avg_daily_sales,
-                m.SeriesMeta.long_run_daily_sales,
-            ).where(m.SeriesMeta.run_id == run_id),
-        )
-        .set_index(UNIQUE_ID)
-        .reindex(inputs.unique_ids)
-    )
-    inputs = replace(
-        inputs,
-        hist_mean=rates["avg_daily_sales"].fillna(0.0).to_numpy(dtype="float64"),
-        long_run_mean=rates["long_run_daily_sales"].fillna(0.0).to_numpy(dtype="float64"),
+        baseline=run.baseline_model,
+        history=hist,
+        forecasts=fc,
+        validation=val,
+        series=series,
     )
     params = InventorySettings.model_validate(run.settings["inventory"])
     return inputs, params

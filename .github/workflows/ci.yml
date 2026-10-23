@@ -34,7 +34,7 @@ jobs:
           version: "0.13.1"
           enable-cache: true
       - name: Install dependencies
-        run: uv sync --frozen --python 3.11
+        run: uv sync --frozen --python 3.11   # dev + app groups (pyproject default-groups)
       - name: Ruff lint
         run: uv run ruff check .
       - name: Ruff format

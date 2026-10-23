@@ -31,18 +31,18 @@ is in [docs/methodology.md](docs/methodology.md).
 
 | Layer | Highlights |
 |---|---|
-| **Data** | chunked M5 loader, stratified seeded subset, wide→long, contract validation, synthetic M5-format generator (tests & offline demo) |
+| **Data** | chunked M5 loader, stratified seeded subset, wide→long, pandera schema validation, synthetic M5-format generator (tests & offline demo) |
 | **Features** | calendar, SNAP, events, relative prices; lags ≥ horizon plus horizon-aware *origin* features; leakage proven by tests |
 | **Models** | naive, seasonal naive, moving average, Croston, TSB, ETS (statsforecast, conformal intervals); global LightGBM (Tweedie + quantiles) |
 | **Evaluation** | rolling-origin backtesting (3 validation + 3 test windows), WRMSSE, RMSSE, MAE, bias, pinball, coverage; SHAP; MLflow tracking |
 | **Optimisation** | bias-corrected safety stock from measured lead-time errors, reorder points that follow the daily forecast, EOQ, vectorised lost-sales simulator, service-level sensitivity |
 | **Serving** | PostgreSQL + SQLAlchemy 2 + Alembic, bulk `COPY` publishing, FastAPI with live what-if (< 1 s for ~2,000 series) |
-| **Dashboard** | React 19 + TypeScript + Tailwind + Recharts: overview, forecast explorer, inventory, what-if, model comparison |
+| **Dashboards** | React 19 + TypeScript + Tailwind + Recharts (overview, forecast explorer, inventory, what-if, models) and a Streamlit app over the same results |
 | **Engineering** | `mypy --strict`, ruff, 200+ tests incl. real-PostgreSQL integration, 97 % coverage, Docker Compose, GitHub Actions |
 
 ## Quick start
 
-Prerequisites: Python 3.11 via [uv](https://docs.astral.sh/uv/), Node 22+. Docker is optional.
+Prerequisites: Python 3.11 via [uv](https://docs.astral.sh/uv/), Node 22+, GNU Make (Windows: `winget install ezwinports.make`). Docker is optional.
 
 ```bash
 uv sync                                  # Python environment
@@ -57,10 +57,15 @@ in the same format.
 ### Option A — no Docker (recommended for the laptop demo)
 
 ```bash
-uv run demand-engine run-all --no-publish   # ingest + 7 models + simulation (~9 min)
-uv run demand-engine demo                   # embedded PostgreSQL, migrate, publish, serve
-# open http://127.0.0.1:8000  (API docs: http://127.0.0.1:8000/docs)
+make setup        # uv sync, frontend build, git hooks
+make data         # data/raw M5 CSVs -> data/processed/sales.parquet
+make train        # 7 models + backtests + inventory simulation (~9 min)
+make api          # embedded PostgreSQL + publish + API & React dashboard on :8000
+make app          # alternative Streamlit dashboard on :8501 (no database needed)
 ```
+
+Without `make`, the same commands are `uv run demand-engine ingest | run | demo` and
+`uv run streamlit run app/streamlit_app.py`. API docs: http://127.0.0.1:8000/docs
 
 ### Option B — Docker Compose
 
@@ -73,7 +78,8 @@ docker compose --profile mlflow up mlflow              # MLflow UI on http://loc
 ### Development
 
 ```bash
-uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest
+make lint && make test                     # ruff, mypy --strict, pytest
+uv run pre-commit run --all-files          # also runs on every commit after `make setup`
 cd frontend && npm run lint && npm run typecheck && npm test
 uv run demand-engine serve & (cd frontend && npm run dev)   # hot-reload UI on :5173
 ```

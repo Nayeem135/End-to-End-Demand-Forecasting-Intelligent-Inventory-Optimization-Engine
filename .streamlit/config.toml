@@ -1,0 +1,7 @@
+# Streamlit settings for `make app`: no first-run e-mail prompt, no telemetry.
+[server]
+headless = true
+port = 8501
+
+[browser]
+gatherUsageStats = false

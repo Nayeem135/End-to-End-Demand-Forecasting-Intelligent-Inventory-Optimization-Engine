@@ -18,10 +18,10 @@ WORKDIR /app
 
 # Dependencies first (cached layer), then the project itself.
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-default-groups --no-install-project
 COPY src ./src
 COPY alembic.ini ./
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-default-groups
 
 RUN useradd --create-home --uid 1000 app && mkdir -p /app/data /app/artifacts && chown -R app /app
 USER app

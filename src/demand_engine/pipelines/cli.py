@@ -17,8 +17,11 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-from collections.abc import Sequence
+import subprocess
+import time
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 from demand_engine.config import Settings, get_settings
 from demand_engine.data.schema import SALES_FILE
@@ -100,10 +103,61 @@ def _cmd_serve(settings: Settings, args: argparse.Namespace) -> None:
     uvicorn.run(create_app(settings), host=args.host, port=args.port, log_level="info")
 
 
+def start_embedded_postgres(
+    pgdata: Path,
+    get_server: Callable[..., Any],
+    attempts: int = 6,
+    delay_seconds: float = 10.0,
+    sleep: Callable[[float], None] = time.sleep,
+) -> Any:
+    """Start (or attach to) the embedded PostgreSQL server, tolerating slow crash recovery.
+
+    After an unclean shutdown PostgreSQL replays its log and syncs the data directory
+    before accepting connections, which can exceed ``pgserver``'s fixed 10 s start
+    timeout. The server keeps starting in the background, and ``pgserver`` attaches to
+    an already-running server, so waiting and retrying is enough. While attached to a
+    server that is still recovering, ``pgserver`` fails an internal ``assert status ==
+    'ready'``; that ``AssertionError`` therefore also means "not ready yet".
+
+    Raises:
+        subprocess.TimeoutExpired | AssertionError: If the server is still not ready after
+            ``attempts`` tries.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            return get_server(pgdata, cleanup_mode="stop")
+        except (subprocess.TimeoutExpired, AssertionError):
+            if attempt == attempts:
+                raise
+            logger.warning(
+                "PostgreSQL is still starting (recovering from an unclean shutdown?); "
+                "retrying in %.0fs (%d/%d)",
+                delay_seconds,
+                attempt,
+                attempts,
+            )
+            sleep(delay_seconds)
+    raise RuntimeError("unreachable")  # pragma: no cover - loop always returns or raises
+
+
+def _fresh_pgserver(pgdata: Path, cleanup_mode: str) -> Any:  # pragma: no cover - needs pgserver
+    """``pgserver.get_server`` without its stale-handle cache.
+
+    pgserver registers a server handle in a class-level cache *before* starting
+    PostgreSQL, so a start that timed out leaves a broken handle that every later
+    ``get_server`` call would return. Evicting it lets a retry attach to the server once
+    crash recovery has finished.
+    """
+    from pgserver import postgres_server
+
+    postgres_server.PostgresServer._instances.pop(pgdata, None)
+    return postgres_server.get_server(pgdata, cleanup_mode=cleanup_mode)
+
+
 def _cmd_demo(settings: Settings, args: argparse.Namespace) -> None:
     """Self-contained demo using an embedded PostgreSQL server (pip package ``pgserver``)."""
     try:
-        import pgserver
+        import pgserver  # noqa: F401 - availability check; used via _fresh_pgserver
     except ImportError as exc:  # pragma: no cover - depends on optional dev dependency
         raise SystemExit(
             "the 'demo' command needs the dev dependency 'pgserver' (uv sync)"
@@ -111,7 +165,7 @@ def _cmd_demo(settings: Settings, args: argparse.Namespace) -> None:
 
     pgdata = settings.paths.data_dir / "pgdata"
     pgdata.mkdir(parents=True, exist_ok=True)
-    server = pgserver.get_server(pgdata.resolve(), cleanup_mode="stop")
+    server = start_embedded_postgres(pgdata.resolve(), _fresh_pgserver)
     url = server.get_uri().replace("postgresql://", "postgresql+psycopg://", 1)
     logger.info("Embedded PostgreSQL running at %s", url)
     os.environ["DATABASE__URL"] = url
