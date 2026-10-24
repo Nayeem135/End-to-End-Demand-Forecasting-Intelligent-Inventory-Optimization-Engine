@@ -1,38 +1,67 @@
-# Python
+# ---------------------------------------------------------------- Data (never commit)
+# The M5 files are >100 MB (GitHub limit) and Kaggle's terms forbid redistribution.
+data/raw/
+data/processed/
+# Everything else under the top-level data/ (embedded Postgres, downloads). The leading
+# "/" anchors it: an unanchored "data/" would also hide src/demand_engine/data/.
+/data/
+# Safety net: no raw data or archives anywhere in the tree.
+*.csv
+*.parquet
+*.zip
+*.gz
+
+# ---------------------------------------------------------------- Experiments / outputs
+mlruns/
+/artifacts/
+*.db
+*.sqlite
+*.pkl
+*.joblib
+*.log
+
+# ---------------------------------------------------------------- Secrets
+.env
+.env.*
+!.env.example
+
+# ---------------------------------------------------------------- Python
 __pycache__/
 *.py[cod]
+*.so
 .venv/
+venv/
+.python-version
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
 .coverage
+.coverage.*
 coverage.xml
 htmlcov/
 *.egg-info/
 dist/
 build/
-
-# Project runtime outputs (never commit data / models).
-# Anchored with a leading "/": an unanchored "data/" also matched src/demand_engine/data/.
-/data/
-/mlruns/
-/mlflow.db
-/artifacts/
-*.parquet
-
-# Env / secrets
-.env
-
-# Notebooks
 .ipynb_checkpoints/
 
-# Frontend
-frontend/node_modules/
+# ---------------------------------------------------------------- Node / frontend
+node_modules/
 frontend/dist/
 frontend/coverage/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# OS / editors
+# ---------------------------------------------------------------- Docker
+docker-compose.override.yml
+.docker/
+
+# ---------------------------------------------------------------- OS / editors
 .DS_Store
 Thumbs.db
+desktop.ini
 .idea/
 .vscode/
+*.swp
