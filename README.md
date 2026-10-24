@@ -6,7 +6,7 @@ by **replaying 12 weeks of unseen demand** through a day-by-day inventory simula
 served through a FastAPI backend and a React dashboard with a live what-if simulator.
 
 ![CI](https://img.shields.io/badge/CI-ruff%20%C2%B7%20mypy%20strict%20%C2%B7%20pytest-brightgreen)
-![coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11-blue)
 
 ## Results (California, 498 items × 4 stores = 1,961 series, test period 29 Feb – 22 May 2016)
@@ -29,6 +29,35 @@ served through a FastAPI backend and a React dashboard with a live what-if simul
 
 The full reasoning — including two evaluation pitfalls found and fixed along the way —
 is in [docs/methodology.md](docs/methodology.md).
+
+## Dashboard
+
+Screenshots of the running React dashboard (`make api`, http://127.0.0.1:8000) on the
+results above.
+
+**Overview** — headline savings, cost breakdown by policy, and the cost / service-level
+trade-off of the two optimised policies.
+
+![Overview page](docs/screenshots/overview.png)
+
+**Forecast explorer** — actual sales, the LightGBM forecast with its 80 % interval after
+the test cut-off, the moving-average baseline, and the SHAP drivers of that forecast.
+
+![Forecast explorer](docs/screenshots/forecasts.png)
+
+**Inventory** — safety stock, reorder point and order quantity for every SKU-store, and
+the simulated day-by-day stock level of the selected item under each policy.
+
+![Inventory recommendations](docs/screenshots/inventory.png)
+
+**What-if** — every policy re-computed and the 12-week test period re-simulated live
+(here: supplier lead time raised from 7 to 14 days).
+
+![What-if simulator](docs/screenshots/what_if.png)
+
+**Models** — leaderboard of the seven forecasters and global SHAP feature importance.
+
+![Model comparison](docs/screenshots/models.png)
 
 ## What is inside
 
