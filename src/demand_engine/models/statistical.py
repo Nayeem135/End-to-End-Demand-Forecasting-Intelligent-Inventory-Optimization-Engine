@@ -38,6 +38,7 @@ class StatsForecastModel(Forecaster):
         model_factory: Callable[[], Any],
         level: int = 80,
         conformal: bool = True,
+        hyperparams: dict[str, object] | None = None,
     ) -> None:
         """Create the wrapper.
 
@@ -47,12 +48,19 @@ class StatsForecastModel(Forecaster):
             level: Prediction interval level in percent.
             conformal: Use conformal intervals; ``False`` uses the model's native
                 (likelihood-based) intervals, which is much faster for ETS.
+            hyperparams: The model's settings, reported by :meth:`params`.
         """
         super().__init__(level=level)
         self.name = name
         self._factory = model_factory
         self._conformal = conformal
+        self._hyperparams = dict(hyperparams or {})
         self._history: pd.DataFrame | None = None
+
+    def params(self) -> dict[str, object]:
+        """Base parameters plus the statsforecast model settings and interval method."""
+        intervals = f"conformal({CONFORMAL_WINDOWS} windows)" if self._conformal else "native"
+        return super().params() | self._hyperparams | {"intervals": intervals}
 
     def _fit(self, history: pd.DataFrame) -> None:
         # statsforecast fits and forecasts in one call; we keep the history and run it in predict.
@@ -88,12 +96,19 @@ def make_naive(level: int = 80) -> Forecaster:
 
 def make_seasonal_naive(season_length: int = 7, level: int = 80) -> Forecaster:
     """Value from the same weekday last week."""
-    return StatsForecastModel("seasonal_naive", lambda: SeasonalNaive(season_length), level=level)
+    return StatsForecastModel(
+        "seasonal_naive",
+        lambda: SeasonalNaive(season_length),
+        level=level,
+        hyperparams={"season_length": season_length},
+    )
 
 
 def make_moving_average(window: int = 28, level: int = 80) -> Forecaster:
     """Flat forecast equal to the mean of the last ``window`` days."""
-    return StatsForecastModel("moving_average", lambda: WindowAverage(window), level=level)
+    return StatsForecastModel(
+        "moving_average", lambda: WindowAverage(window), level=level, hyperparams={"window": window}
+    )
 
 
 def make_auto_ets(season_length: int = 7, level: int = 80) -> Forecaster:
@@ -107,14 +122,22 @@ def make_auto_ets(season_length: int = 7, level: int = 80) -> Forecaster:
         lambda: AutoETS(season_length=season_length, model="ANA"),
         level=level,
         conformal=False,
+        hyperparams={"season_length": season_length, "ets_model": "ANA"},
     )
 
 
 def make_croston(level: int = 80) -> Forecaster:
     """Croston's method with optimised smoothing, designed for intermittent demand."""
-    return StatsForecastModel("croston", CrostonOptimized, level=level)
+    return StatsForecastModel(
+        "croston", CrostonOptimized, level=level, hyperparams={"variant": "optimized"}
+    )
 
 
 def make_tsb(level: int = 80) -> Forecaster:
     """Teunter-Syntetos-Babai: intermittent demand with obsolescence-aware probability."""
-    return StatsForecastModel("tsb", lambda: TSB(alpha_d=0.1, alpha_p=0.1), level=level)
+    return StatsForecastModel(
+        "tsb",
+        lambda: TSB(alpha_d=0.1, alpha_p=0.1),
+        level=level,
+        hyperparams={"alpha_d": 0.1, "alpha_p": 0.1},
+    )

@@ -65,8 +65,10 @@ class Tracker:
 
         mlflow.log_params({k: str(v)[:500] for k, v in flatten("", params).items()})
 
-    def log_metrics(self, metrics: Mapping[str, float], prefix: str = "") -> None:
-        """Log numeric metrics, skipping non-finite values."""
+    def log_metrics(
+        self, metrics: Mapping[str, float], prefix: str = "", step: int | None = None
+    ) -> None:
+        """Log numeric metrics (optionally at a step, e.g. a fold), skipping non-finite values."""
         if not self.enabled:
             return
         import math
@@ -74,7 +76,7 @@ class Tracker:
         import mlflow
 
         clean = {f"{prefix}{k}": float(v) for k, v in metrics.items() if math.isfinite(float(v))}
-        mlflow.log_metrics(clean)
+        mlflow.log_metrics(clean, step=step)
 
     def log_artifact(self, path: Path) -> None:
         """Attach a local file to the active run."""

@@ -112,6 +112,7 @@ class ModelSettings(BaseModel):
     """Model selection and uncertainty settings."""
 
     candidates: list[ModelName] = Field(default_factory=lambda: list(ALL_MODELS), min_length=1)
+    tuning_trials: int = Field(default=15, ge=1, description="Optuna trial budget for `tune`.")
     baseline: ModelName = Field(
         default="moving_average", description="Forecast used by the naive inventory policy."
     )

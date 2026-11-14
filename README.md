@@ -91,7 +91,8 @@ in the same format.
 ```bash
 make setup        # uv sync, frontend build, git hooks
 make data         # data/raw M5 CSVs -> data/processed/sales.parquet
-make train        # 7 models + backtests + inventory simulation (~9 min)
+make train        # 7 models + backtests + inventory simulation (~9 min) + leaderboard.md
+make tune         # optional: Optuna tuning of LightGBM (15 trials, logged to MLflow)
 make run          # embedded PostgreSQL + publish + API & React dashboard on :8000
 make app          # alternative Streamlit dashboard on :8501 (no database needed)
 ```

@@ -1,12 +1,13 @@
 # Developer entry points. Every target is a thin wrapper around uv / npm, so the same
 # commands work in Windows cmd, Git Bash and Linux CI.
 .DEFAULT_GOAL := help
-.PHONY: help setup data train test lint run docker-up api app
+.PHONY: help setup data train tune test lint run docker-up api app
 
 help:  ## List targets
 	@echo "setup  install Python + frontend deps and git hooks"
 	@echo "data   build data/processed/sales.parquet from data/raw (M5 CSVs)"
 	@echo "train  forecast, backtest, optimise and simulate -> artifacts/runs/<id>"
+	@echo "tune   Optuna tuning of LightGBM (small trial budget, logged to MLflow)"
 	@echo "test   run the full test suite (unit + integration)"
 	@echo "lint   ruff lint, ruff format check, mypy --strict"
 	@echo "run    start the API + dashboard on :8000 (embedded PostgreSQL, no Docker)"
@@ -25,6 +26,9 @@ data:
 
 train:
 	uv run demand-engine run
+
+tune:
+	uv run demand-engine tune
 
 test:
 	uv run pytest

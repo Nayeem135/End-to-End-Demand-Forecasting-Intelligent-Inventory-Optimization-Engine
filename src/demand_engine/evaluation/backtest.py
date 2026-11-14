@@ -5,13 +5,18 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pandas as pd
 
 from demand_engine.data.schema import DS, UNIQUE_ID, Y
 from demand_engine.data.splits import split_at
-from demand_engine.evaluation.metrics import per_series_metrics, revenue_weights, summarize
+from demand_engine.evaluation.metrics import (
+    per_series_metrics,
+    revenue_weights,
+    summarize,
+    summarize_by,
+)
 from demand_engine.models.base import Forecaster
 from demand_engine.models.registry import ForecasterFactory
 
@@ -29,6 +34,8 @@ class BacktestResult:
     per_series: pd.DataFrame
     summary: dict[str, float]
     seconds: float
+    weights: pd.Series = field(default_factory=lambda: pd.Series(dtype="float64"))
+    fold_summaries: list[dict[str, float]] = field(default_factory=list)
 
 
 def rolling_forecasts(
@@ -92,8 +99,14 @@ def backtest(
     preds = rolling_forecasts(df, factory, cutoffs, horizon, on_fit)
     preds["model"] = name
     history = df[df[DS] <= min(cutoffs)]
+    weights = revenue_weights(history)
     per_series = per_series_metrics(preds, history, level)
-    summary = summarize(per_series, revenue_weights(history))
+    summary = summarize(per_series, weights)
+    folds = []
+    for cutoff, fold in preds.groupby("cutoff", sort=True):
+        fold_history = df[df[DS] <= cutoff]
+        fold_ps = per_series_metrics(fold, fold_history, level)
+        folds.append(summarize(fold_ps, revenue_weights(fold_history)))
     seconds = time.perf_counter() - start
     logger.info(
         "Backtest %-15s WRMSSE=%.4f MAE=%.3f (%.1fs)",
@@ -102,7 +115,26 @@ def backtest(
         summary["mae"],
         seconds,
     )
-    return BacktestResult(name, preds, per_series, summary, seconds)
+    return BacktestResult(name, preds, per_series, summary, seconds, weights, folds)
+
+
+def leaderboard_by_class(results: Sequence[BacktestResult], classes: pd.Series) -> pd.DataFrame:
+    """Leaderboard per demand class: models ranked by WRMSSE within each class.
+
+    Args:
+        results: Backtests of all models on the same cut-offs.
+        classes: Demand class (smooth / erratic / intermittent / lumpy) per ``unique_id``.
+    """
+    frames = [
+        summarize_by(r.per_series, r.weights, classes, name="demand_class").assign(model=r.model)
+        for r in results
+    ]
+    board = pd.concat(frames, ignore_index=True)
+    board["rank"] = board.groupby("demand_class")["wrmsse"].rank(method="first").astype(int)
+    cols = ["demand_class", "rank", "model", "n_series"]
+    return board[cols + [c for c in board.columns if c not in cols]].sort_values(
+        ["demand_class", "rank"], ignore_index=True
+    )
 
 
 def leaderboard(results: Sequence[BacktestResult]) -> pd.DataFrame:

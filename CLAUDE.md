@@ -107,7 +107,11 @@ baseline."* Every number must be reproducible from one command.
   up to `t - horizon`, off by default (no validation gain).
 - **Models**: naive, seasonal naive, moving average, Croston, TSB, ETS(A,N,A) via
   statsforecast (conformal intervals); global LightGBM (Tweedie + P10/P90 quantile models).
-- **Metrics**: MAE, RMSE, bias, RMSSE, revenue-weighted WRMSSE (headline), pinball, coverage.
+- **Metrics**: MAE, RMSE, bias, WAPE (pooled), sMAPE (0/0 := 0), RMSSE, revenue-weighted
+  WRMSSE (headline), pinball, coverage. Leaderboards overall and per demand class
+  (`leaderboard.md`); every model run, parameter and metric (incl. per fold / per class) in MLflow.
+- **Tuning**: `make tune` = seeded Optuna study (default 15 trials) on the FIRST validation
+  fold only; trial 0 = current config. Test windows are never used for tuning.
 - **Inventory**: protection period `P = L + R - 1`. From validation folds, the P-day
   cumulative error gives `bias` and `sigma`; reorder point `s_t = forecast_P + bias + z*sigma`.
   Order size = EOQ of the long-run (last-year) demand rate, shared by the forecast policies.
@@ -143,7 +147,7 @@ baseline."* Every number must be reproducible from one command.
 ## Commands
 
 ```bash
-make setup | data | train | test | lint | run | docker-up | app   # entry points (see `make`)
+make setup | data | train | tune | test | lint | run | docker-up | app   # see `make`
 LOG_FORMAT=json make data                             # structured (JSON) logs; default is text
 uv run pre-commit run --all-files                     # same checks as the git hook
 uv sync                                     # install deps (Python 3.11 venv)

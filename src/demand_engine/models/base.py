@@ -65,6 +65,10 @@ class Forecaster(ABC):
         raw = self._predict(request)
         return self._enforce_contract(request, raw)
 
+    def params(self) -> dict[str, object]:
+        """Model name and hyper-parameters (logged to MLflow with every run)."""
+        return {"model": self.name, "interval_level": self.level}
+
     @abstractmethod
     def _fit(self, history: pd.DataFrame) -> None:
         """Model-specific fitting."""

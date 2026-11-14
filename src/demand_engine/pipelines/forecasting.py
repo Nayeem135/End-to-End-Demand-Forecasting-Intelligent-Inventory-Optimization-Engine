@@ -16,8 +16,14 @@ from demand_engine.config import ModelName, Settings
 from demand_engine.data.schema import DS, PRICE, UNIQUE_ID, Y
 from demand_engine.data.splits import SplitPlan, make_split_plan
 from demand_engine.data.transform import classify_intermittency
-from demand_engine.evaluation.backtest import BacktestResult, backtest, leaderboard
+from demand_engine.evaluation.backtest import (
+    BacktestResult,
+    backtest,
+    leaderboard,
+    leaderboard_by_class,
+)
 from demand_engine.evaluation.explain import Explanation, explain
+from demand_engine.evaluation.metrics import summarize_by
 from demand_engine.models.base import Forecaster
 from demand_engine.models.lgbm import LightGBMForecaster
 from demand_engine.models.registry import model_factory
@@ -37,9 +43,40 @@ class ForecastingOutput:
     baseline: str
     leaderboard_validation: pd.DataFrame
     leaderboard_test: pd.DataFrame
+    leaderboard_by_class: pd.DataFrame = field(default_factory=pd.DataFrame)
     explanation: Explanation | None = None
     feature_gain: pd.DataFrame | None = None
     mlflow_run_ids: dict[str, str] = field(default_factory=dict)
+
+
+def demand_classes(df: pd.DataFrame, before: pd.Timestamp) -> pd.Series:
+    """Syntetos-Boylan class per series from history up to ``before`` (no evaluation data)."""
+    history = df[df[DS] <= before]
+    return history.groupby(UNIQUE_ID)[Y].agg(
+        lambda s: classify_intermittency(s.to_numpy(dtype="float64"))
+    )
+
+
+def _log_model_run(
+    tracker: Tracker,
+    params: dict[str, object],
+    validation: BacktestResult,
+    test: BacktestResult,
+    classes: pd.Series,
+) -> None:
+    """Log one model's parameters and every metric (overall, per fold, per demand class)."""
+    tracker.log_params(params)
+    tracker.log_metrics(validation.summary, prefix="val_")
+    tracker.log_metrics(test.summary, prefix="test_")
+    tracker.log_metrics({"seconds": validation.seconds + test.seconds})
+    for split, result in (("val", validation), ("test", test)):
+        for step, fold in enumerate(result.fold_summaries):
+            tracker.log_metrics(fold, prefix=f"{split}_fold_", step=step)
+        per_class = summarize_by(result.per_series, result.weights, classes, name="demand_class")
+        for cls, metrics in per_class.set_index("demand_class").drop(columns="n_series").iterrows():
+            tracker.log_metrics(
+                {str(k): float(v) for k, v in metrics.items()}, prefix=f"{split}_{cls}_"
+            )
 
 
 def models_to_run(settings: Settings) -> list[ModelName]:
@@ -71,6 +108,7 @@ def run_forecasting(df: pd.DataFrame, settings: Settings, tracker: Tracker) -> F
     def keep_lgbm(cutoff: pd.Timestamp, model: Forecaster) -> None:
         last_lgbm[:] = [(cutoff, model)]
 
+    classes = demand_classes(df, plan.first_cutoff)
     for name in models_to_run(settings):
         factory = model_factory(name, settings)
         with tracker.run(name, nested=True) as run_id:
@@ -81,15 +119,23 @@ def run_forecasting(df: pd.DataFrame, settings: Settings, tracker: Tracker) -> F
             test[name] = backtest(
                 df, name, factory, plan.test_cutoffs, bt.horizon, level, on_fit=hook
             )
-            tracker.log_params({"model": name})
-            tracker.log_metrics(validation[name].summary, prefix="val_")
-            tracker.log_metrics(test[name].summary, prefix="test_")
-            tracker.log_metrics({"seconds": validation[name].seconds + test[name].seconds})
+            _log_model_run(tracker, factory().params(), validation[name], test[name], classes)
             if run_id:
                 run_ids[name] = run_id
 
     board_val = leaderboard([validation[n] for n in settings.model.candidates])
     board_test = leaderboard([test[n] for n in settings.model.candidates])
+    by_class = pd.concat(
+        [
+            leaderboard_by_class(
+                [validation[n] for n in settings.model.candidates], classes
+            ).assign(split="validation"),
+            leaderboard_by_class([test[n] for n in settings.model.candidates], classes).assign(
+                split="test"
+            ),
+        ],
+        ignore_index=True,
+    )
     champion = str(board_val["model"].iloc[0])
     logger.info("Champion (validation WRMSSE): %s", champion)
 
@@ -101,6 +147,7 @@ def run_forecasting(df: pd.DataFrame, settings: Settings, tracker: Tracker) -> F
         baseline=settings.model.baseline,
         leaderboard_validation=board_val,
         leaderboard_test=board_test,
+        leaderboard_by_class=by_class,
         mlflow_run_ids=run_ids,
     )
     if last_lgbm:

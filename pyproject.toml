@@ -10,6 +10,7 @@ dependencies = [
     "lightgbm>=4.3",
     "mlflow-skinny>=2.16",
     "numpy>=1.26,<2.3",
+    "optuna>=5.0.0",
     "pandas>=2.2",
     "pandera[pandas]>=0.34.1",
     "psycopg[binary]>=3.2",

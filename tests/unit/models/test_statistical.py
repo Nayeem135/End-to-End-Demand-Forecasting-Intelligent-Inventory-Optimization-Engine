@@ -50,3 +50,18 @@ def test_moving_average_is_flat_mean(split: tuple[pd.DataFrame, pd.DataFrame]) -
     uid = train["unique_id"].iloc[0]
     expected = train[train["unique_id"] == uid]["y"].tail(14).mean()
     assert out[out["unique_id"] == uid]["yhat"].to_numpy() == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("factory", "expected"),
+    [
+        (lambda: st.make_seasonal_naive(7), {"season_length": 7}),
+        (lambda: st.make_moving_average(28), {"window": 28}),
+        (lambda: st.make_auto_ets(7), {"ets_model": "ANA", "intervals": "native"}),
+        (st.make_tsb, {"alpha_d": 0.1, "alpha_p": 0.1}),
+    ],
+)
+def test_params_include_hyperparameters(factory: object, expected: dict[str, object]) -> None:
+    params = factory().params()  # type: ignore[operator]
+    assert expected.items() <= params.items()
+    assert "interval_level" in params

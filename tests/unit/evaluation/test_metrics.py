@@ -74,4 +74,42 @@ def test_per_series_and_summary() -> None:
     assert b["rmsse"] == pytest.approx(1.0 / 2.0)  # naive scale = 4
     summary = m.summarize(per, m.revenue_weights(hist))
     assert summary["wrmsse"] == pytest.approx(0.75 * 0.5)
-    assert set(summary) == {"wrmsse", "rmsse", "mae", "rmse", "bias", "coverage", "pinball"}
+    assert set(summary) == {
+        "wrmsse", "wape", "smape", "rmsse", "mae", "rmse", "bias", "coverage", "pinball"
+    }  # fmt: skip
+    # pooled WAPE: |errors| a 0+0, b 1+1 = 2 over total demand 2+4 = 6
+    assert summary["wape"] == pytest.approx(2 / 6)
+
+
+def test_wape_and_smape_hand_computed() -> None:
+    y = np.array([0.0, 2.0, 4.0, 0.0])
+    yhat = np.array([0.0, 1.0, 4.0, 3.0])
+    assert m.wape(y, yhat) == pytest.approx((0 + 1 + 0 + 3) / 6)
+    # terms: 0/0 -> 0, 2*1/3, 0, 2*3/3 = 2 -> mean of [0, 2/3, 0, 2]
+    assert m.smape(y, yhat) == pytest.approx((2 / 3 + 2) / 4)
+    assert np.isnan(m.wape(np.zeros(3), np.ones(3)))
+    assert m.smape(np.zeros(2), np.zeros(2)) == 0.0
+
+
+def test_summarize_by_groups() -> None:
+    per = pd.DataFrame(
+        {
+            "unique_id": ["a", "b", "c"],
+            "mae": [1.0, 2.0, 3.0],
+            "rmse": 1.0,
+            "bias": 0.0,
+            "rmsse": [0.5, 1.0, 2.0],
+            "smape": 0.1,
+            "abs_err": [1.0, 2.0, 3.0],
+            "abs_y": [2.0, 2.0, 3.0],
+            "n": 2,
+            "coverage": 0.8,
+            "pinball": 0.1,
+        }
+    )
+    weights = pd.Series({"a": 0.25, "b": 0.25, "c": 0.5})
+    out = m.summarize_by(per, weights, pd.Series({"a": "x", "b": "x", "c": "y"}), name="cls")
+    x = out.set_index("cls").loc["x"]
+    assert x["n_series"] == 2
+    assert x["wrmsse"] == pytest.approx(0.75)  # weights renormalised within the group
+    assert x["wape"] == pytest.approx(3 / 4)

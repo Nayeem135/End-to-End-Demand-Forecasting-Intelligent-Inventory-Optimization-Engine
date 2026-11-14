@@ -11,6 +11,7 @@ import pandas as pd
 
 from demand_engine.config import Settings
 from demand_engine.data.schema import DS, PRICE, UNIQUE_ID, Y
+from demand_engine.evaluation.report import leaderboard_report
 from demand_engine.pipelines.artifacts import RunArtifacts, new_run
 from demand_engine.pipelines.forecasting import ForecastingOutput, run_forecasting, series_catalogue
 from demand_engine.pipelines.optimize import OptimizationOutput, run_optimization
@@ -46,7 +47,8 @@ def run_pipeline(df: pd.DataFrame, settings: Settings) -> RunArtifacts:
         manifest = _save_artifacts(store, df, settings, fc, opt, parent_id)
         tracker.set_tags({"champion": fc.champion, "artifacts_run_id": store.run_id})
         tracker.log_metrics(manifest["headline"])
-        tracker.log_artifact(store.root / "leaderboard.parquet")
+        for name in ("leaderboard.md", "leaderboard.csv", "leaderboard_by_class.csv"):
+            tracker.log_artifact(store.root / name)
         tracker.log_artifact(store.root / "portfolio.parquet")
     logger.info("Pipeline finished in %.1fs -> %s", time.perf_counter() - start, store.root)
     return store
@@ -74,6 +76,15 @@ def _save_artifacts(
     board = pd.concat(boards, ignore_index=True)
     board["is_champion"] = board["model"] == fc.champion
     store.save_frame("leaderboard", board)
+    store.save_frame("leaderboard_by_class", fc.leaderboard_by_class)
+    board.to_csv(store.root / "leaderboard.csv", index=False)
+    fc.leaderboard_by_class.to_csv(store.root / "leaderboard_by_class.csv", index=False)
+    (store.root / "leaderboard.md").write_text(
+        leaderboard_report(
+            fc.leaderboard_validation, fc.leaderboard_test, fc.leaderboard_by_class, fc.champion
+        ),
+        encoding="utf-8",
+    )
 
     keep = list(dict.fromkeys([fc.champion, fc.baseline]))
     forecast_cols = [UNIQUE_ID, DS, "cutoff", "model", "yhat", "yhat_lo", "yhat_hi"]

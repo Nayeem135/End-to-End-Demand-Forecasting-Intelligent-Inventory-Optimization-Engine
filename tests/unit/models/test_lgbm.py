@@ -62,3 +62,20 @@ def test_rejects_short_lags() -> None:
 def test_feature_matrix_requires_fit(small_long: pd.DataFrame) -> None:
     with pytest.raises(RuntimeError, match="fitted"):
         LightGBMForecaster(SETTINGS, horizon=H, seed=1).feature_matrix(small_long)
+
+
+def test_params_report_all_settings(split: tuple[pd.DataFrame, pd.DataFrame]) -> None:
+    params = LightGBMForecaster(SETTINGS, horizon=H, seed=3).params()
+    assert params["model"] == "lightgbm"
+    assert params["num_leaves"] == SETTINGS.num_leaves
+    assert params["horizon"] == H
+    assert params["seed"] == 3
+
+
+def test_point_only_mode_trains_one_booster(split: tuple[pd.DataFrame, pd.DataFrame]) -> None:
+    train, window = split
+    model = LightGBMForecaster(SETTINGS, horizon=H, seed=1, quantile_models=False).fit(train)
+    out = model.predict(window)
+    assert set(model.boosters) == {"yhat"}
+    assert (out["yhat_lo"] == out["yhat"]).all()
+    assert (out["yhat_hi"] == out["yhat"]).all()

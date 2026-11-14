@@ -31,6 +31,23 @@ def bias(y: FloatArray, yhat: FloatArray) -> float:
     return float(np.mean(yhat - y))
 
 
+def wape(y: FloatArray, yhat: FloatArray) -> float:
+    """Weighted absolute percentage error ``sum|y - yhat| / sum|y|`` (``nan`` if no demand)."""
+    denom = float(np.sum(np.abs(y)))
+    return float(np.sum(np.abs(y - yhat)) / denom) if denom > 0 else float("nan")
+
+
+def smape(y: FloatArray, yhat: FloatArray) -> float:
+    """Symmetric MAPE in [0, 2]: mean of ``2|y - yhat| / (|y| + |yhat|)``, with 0/0 := 0.
+
+    Caveat for intermittent demand: any positive forecast on a zero-sales day scores the
+    maximum 2.0 (200 %), so sMAPE rewards forecasting zero; read it alongside WAPE/RMSSE.
+    """
+    denom = np.abs(y) + np.abs(yhat)
+    terms = np.divide(2.0 * np.abs(y - yhat), denom, out=np.zeros_like(denom), where=denom > 0)
+    return float(np.mean(terms))
+
+
 def naive_scale(y_train: FloatArray) -> float:
     """Mean squared one-step naive error on the training data (RMSSE denominator)."""
     if y_train.size < 2:
@@ -78,7 +95,8 @@ def per_series_metrics(preds: pd.DataFrame, history: pd.DataFrame, level: int) -
         level: Interval level in percent used for pinball loss quantiles.
 
     Returns:
-        One row per series with mae, rmse, bias, rmsse, coverage and pinball.
+        One row per series with mae, rmse, bias, rmsse, smape, coverage and pinball, plus
+        the sums needed to pool WAPE (``abs_err``, ``abs_y``) and row counts ``n``.
     """
     tail = (1.0 - level / 100.0) / 2.0
     scales = history.groupby(UNIQUE_ID)[Y].apply(lambda s: naive_scale(s.to_numpy(dtype="float64")))
@@ -97,6 +115,10 @@ def per_series_metrics(preds: pd.DataFrame, history: pd.DataFrame, level: int) -
                 "rmse": float(np.sqrt(mse)),
                 "bias": bias(y, yhat),
                 "rmsse": float(np.sqrt(mse / scale)) if scale > _EPS else float("nan"),
+                "smape": smape(y, yhat),
+                "abs_err": float(np.sum(np.abs(y - yhat))),
+                "abs_y": float(np.sum(np.abs(y))),
+                "n": int(y.size),
                 "coverage": coverage(y, lo, hi),
                 "pinball": 0.5 * (pinball(y, lo, tail) + pinball(y, hi, 1.0 - tail)),
             }
@@ -104,18 +126,41 @@ def per_series_metrics(preds: pd.DataFrame, history: pd.DataFrame, level: int) -
     return pd.DataFrame(rows)
 
 
+def summarize_by(
+    per_series: pd.DataFrame, weights: pd.Series, groups: pd.Series, name: str = "group"
+) -> pd.DataFrame:
+    """Scorecard per group (e.g. demand class): one :func:`summarize` row per group.
+
+    Args:
+        per_series: Output of :func:`per_series_metrics`.
+        weights: Revenue weights per series (renormalised within each group).
+        groups: Group label per ``unique_id``.
+        name: Column name for the group label.
+    """
+    labels = per_series[UNIQUE_ID].map(groups)
+    rows = [
+        {name: g, "n_series": len(part), **summarize(part, weights)}
+        for g, part in per_series.groupby(labels, sort=True)
+    ]
+    return pd.DataFrame(rows)
+
+
 def summarize(per_series: pd.DataFrame, weights: pd.Series) -> dict[str, float]:
     """Aggregate per-series metrics into a single scorecard.
 
     ``wrmsse`` is the revenue-weighted RMSSE (weights renormalised over series
-    with a finite RMSSE); other metrics are simple means across series.
+    with a finite RMSSE); ``wape`` is pooled over all rows (total absolute error / total
+    demand); ``smape`` is the mean over all rows; other metrics are means across series.
     """
     df = per_series.set_index(UNIQUE_ID)
     valid = df["rmsse"].notna()
     w = weights.reindex(df.index).fillna(0.0)[valid]
     wrmsse = float((df.loc[valid, "rmsse"] * w).sum() / w.sum()) if w.sum() > 0 else float("nan")
+    total_y = float(df["abs_y"].sum())
     return {
         "wrmsse": wrmsse,
+        "wape": float(df["abs_err"].sum() / total_y) if total_y > 0 else float("nan"),
+        "smape": float((df["smape"] * df["n"]).sum() / df["n"].sum()),
         "rmsse": float(df["rmsse"].mean()),
         "mae": float(df["mae"].mean()),
         "rmse": float(df["rmse"].mean()),

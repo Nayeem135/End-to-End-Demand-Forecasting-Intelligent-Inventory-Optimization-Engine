@@ -40,10 +40,19 @@ LightGBM uses a Tweedie loss.
 * **Test windows** (3 × 28 = 84 days) are never used for any decision; they provide the
   reported accuracy and the demand on which inventory policies are simulated.
 
-**Metrics.** MAE, RMSE, bias; **RMSSE** (RMSE scaled by the in-sample one-step naive
-error, making series comparable) and **WRMSSE** (revenue-weighted RMSSE — the official
-M5 metric) as the headline; **pinball loss** and **coverage** of the 80 % interval for
-probabilistic quality.
+**Metrics.** MAE, RMSE, bias; **WAPE** (total absolute error ÷ total units, pooled over
+all forecast days); **sMAPE** (mean of 2|e| / (|y| + |ŷ|), with 0/0 := 0); **RMSSE** (RMSE
+scaled by the in-sample one-step naive error, making series comparable) and **WRMSSE**
+(revenue-weighted RMSSE — the official M5 metric) as the headline; **pinball loss** and
+**coverage** of the 80 % interval for probabilistic quality. sMAPE is reported because it
+is common, but it is unsuited to intermittent demand: any non-zero forecast on a zero-sales
+day scores the maximum 200 %, so it rewards forecasting zero.
+
+**Leaderboards.** Every run writes `leaderboard.md` / `.csv` (validation and test, all
+metrics) and a leaderboard **per demand class** (smooth / erratic / intermittent / lumpy,
+classified on data before the first validation cut-off). Every model run is logged to
+MLflow as a nested run with its hyper-parameters, overall metrics, per-fold metrics
+(as steps) and per-class metrics; the reports are attached as artifacts.
 
 ## 3. Forecasting models
 

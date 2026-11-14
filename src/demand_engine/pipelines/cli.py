@@ -5,6 +5,7 @@ Commands
 synthetic   Write a synthetic M5-format dataset to data/raw (offline demo / CI).
 ingest      Build the validated demand table for the configured subset.
 run         Forecast, backtest, optimise and simulate; write run artifacts.
+tune        Optuna tuning of LightGBM (small budget) on the first validation fold.
 db-upgrade  Apply database migrations.
 publish     Load the latest (or a given) run's artifacts into the database.
 run-all     ingest -> run -> db-upgrade -> publish.
@@ -65,6 +66,41 @@ def _cmd_db_upgrade(settings: Settings, _: argparse.Namespace) -> None:
 
     upgrade(settings.database.url)
     logger.info("Database schema is up to date")
+
+
+def _cmd_tune(settings: Settings, args: argparse.Namespace) -> None:
+    import json
+
+    from demand_engine.pipelines.ingest import load_demand_table
+    from demand_engine.pipelines.tracking import Tracker
+    from demand_engine.pipelines.tuning import tune_lightgbm
+
+    tracker = Tracker(
+        settings.mlflow_tracking_uri,
+        settings.mlflow_experiment,
+        settings.paths.artifacts_dir / "mlflow",
+    )
+    trials = args.trials or settings.model.tuning_trials
+    result = tune_lightgbm(load_demand_table(settings), settings, trials, tracker)
+    out = settings.paths.artifacts_dir / "tuning"
+    out.mkdir(parents=True, exist_ok=True)
+    report = {
+        "baseline_wrmsse": result.baseline_wrmsse,
+        "best_wrmsse": result.best_wrmsse,
+        "improvement_pct": result.improvement_pct,
+        "best_params": result.best_params,
+    }
+    (out / "best_params.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    result.trials.to_csv(out / "trials.csv", index=False)
+    logger.info(
+        "Tuning: WRMSSE %.4f -> %.4f (%.2f %%); best params written to %s",
+        result.baseline_wrmsse,
+        result.best_wrmsse,
+        result.improvement_pct,
+        out / "best_params.json",
+    )
+    for key, value in result.best_params.items():
+        logger.info("  MODEL__LGBM__%s=%s", key.upper(), value)
 
 
 def _cmd_publish(settings: Settings, args: argparse.Namespace) -> None:
@@ -193,6 +229,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("ingest", help="build the demand table").set_defaults(func=_cmd_ingest)
     sub.add_parser("run", help="forecast + optimise + simulate").set_defaults(func=_cmd_run)
+
+    p = sub.add_parser("tune", help="Optuna tuning of LightGBM on the first validation fold")
+    p.add_argument("--trials", type=int, default=None, help="trial budget (default: config)")
+    p.set_defaults(func=_cmd_tune)
     sub.add_parser("db-upgrade", help="apply database migrations").set_defaults(
         func=_cmd_db_upgrade
     )

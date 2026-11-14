@@ -1,5 +1,6 @@
 """End-to-end pipeline behaviour on synthetic data (no database needed beyond fixtures)."""
 
+import mlflow
 import pandas as pd
 import pytest
 
@@ -50,3 +51,28 @@ def test_simulation_results_are_consistent(pipeline_run: RunArtifacts) -> None:
 
 def test_mlflow_runs_logged(pipeline_run: RunArtifacts) -> None:
     assert pipeline_run.load_json("manifest")["mlflow_run_id"]
+
+
+def test_leaderboard_reports_written(pipeline_run: RunArtifacts) -> None:
+    by_class = pipeline_run.load_frame("leaderboard_by_class")
+    assert {"validation", "test"} == set(by_class["split"])
+    assert {"wape", "smape", "rmsse", "bias", "wrmsse"} <= set(by_class.columns)
+    report = (pipeline_run.root / "leaderboard.md").read_text(encoding="utf-8")
+    assert "## Test windows by demand class" in report
+    assert (pipeline_run.root / "leaderboard.csv").is_file()
+
+
+def test_mlflow_has_params_folds_and_class_metrics(pipeline_run: RunArtifacts) -> None:
+    manifest = pipeline_run.load_json("manifest")
+    parent = mlflow.get_run(manifest["mlflow_run_id"])
+    children = mlflow.search_runs(
+        experiment_ids=[parent.info.experiment_id],
+        filter_string=f"tags.mlflow.parentRunId = '{parent.info.run_id}'",
+    )
+    lgbm = children[children["tags.mlflow.runName"] == "lightgbm"].iloc[0]
+    assert lgbm["params.num_leaves"] is not None
+    assert lgbm["metrics.val_wape"] >= 0
+    assert any(c.startswith("metrics.test_") and c.endswith("_wrmsse") and "fold" not in c
+               and c not in ("metrics.test_wrmsse",) for c in children.columns)  # fmt: skip
+    history = mlflow.tracking.MlflowClient().get_metric_history(lgbm["run_id"], "val_fold_wrmsse")
+    assert [m.step for m in history] == [0, 1]

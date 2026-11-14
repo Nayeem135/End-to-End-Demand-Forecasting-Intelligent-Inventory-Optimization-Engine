@@ -32,7 +32,12 @@ class LightGBMForecaster(Forecaster):
     name = "lightgbm"
 
     def __init__(
-        self, settings: LightGBMSettings, horizon: int, seed: int, level: int = 80
+        self,
+        settings: LightGBMSettings,
+        horizon: int,
+        seed: int,
+        level: int = 80,
+        quantile_models: bool = True,
     ) -> None:
         """Create the forecaster.
 
@@ -41,6 +46,9 @@ class LightGBMForecaster(Forecaster):
             horizon: Forecast horizon in days (lags must be >= horizon).
             seed: Random seed for bagging / feature sampling.
             level: Central prediction-interval level in percent.
+            quantile_models: Train the P-lo/P-hi quantile models. ``False`` trains only the
+                point model (intervals collapse to the point forecast) — used for fast
+                hyper-parameter tuning, where only point accuracy is scored.
         """
         super().__init__(level=level)
         if min(settings.lags) < horizon:
@@ -48,6 +56,7 @@ class LightGBMForecaster(Forecaster):
         self.settings = settings
         self.horizon = horizon
         self.seed = seed
+        self.quantile_models = quantile_models
         self.spec: FeatureSpec | None = None
         self.boosters: dict[str, lgb.Booster] = {}
         self._history: pd.DataFrame | None = None
@@ -99,9 +108,10 @@ class LightGBMForecaster(Forecaster):
         lo, hi = self.quantiles
         objectives: dict[str, tuple[str, float | None, int]] = {
             "yhat": (self.settings.objective, None, self.settings.n_estimators),
-            "yhat_lo": ("quantile", lo, max(1, self.settings.n_estimators // 2)),
-            "yhat_hi": ("quantile", hi, max(1, self.settings.n_estimators // 2)),
         }
+        if self.quantile_models:
+            objectives["yhat_lo"] = ("quantile", lo, max(1, self.settings.n_estimators // 2))
+            objectives["yhat_hi"] = ("quantile", hi, max(1, self.settings.n_estimators // 2))
         for key, (objective, alpha, rounds) in objectives.items():
             dataset = lgb.Dataset(x, label=y, free_raw_data=False)
             self.boosters[key] = lgb.train(
@@ -121,7 +131,17 @@ class LightGBMForecaster(Forecaster):
         out = rows[[UNIQUE_ID, DS]].copy()
         for key, booster in self.boosters.items():
             out[key] = np.asarray(booster.predict(x), dtype="float64")
+        if not self.quantile_models:
+            out["yhat_lo"] = out["yhat_hi"] = out["yhat"]
         return out
+
+    def params(self) -> dict[str, object]:
+        """All LightGBM hyper-parameters, feature settings, horizon and seed."""
+        return (
+            super().params()
+            | self.settings.model_dump()
+            | {"horizon": self.horizon, "seed": self.seed, "quantile_models": self.quantile_models}
+        )
 
     def feature_matrix(self, frame: pd.DataFrame) -> pd.DataFrame:
         """Model inputs for ``frame`` (history + window, used for SHAP explanations).
