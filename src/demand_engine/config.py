@@ -81,6 +81,10 @@ class LightGBMSettings(BaseModel):
     n_estimators: int = Field(default=400, ge=1)
     lags: list[int] = Field(default_factory=lambda: [28, 35, 42, 49, 56, 364])
     rolling_windows: list[int] = Field(default_factory=lambda: [7, 28, 56])
+    target_encoding: bool = Field(
+        default=False,
+        description="Add leakage-free expanding target encodings (item, store-dept, dept-weekday).",
+    )
 
     @field_validator("lags")
     @classmethod

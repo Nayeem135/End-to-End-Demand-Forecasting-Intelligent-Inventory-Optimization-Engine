@@ -88,6 +88,7 @@ class LightGBMForecaster(Forecaster):
             lags=self.settings.lags,
             windows=self.settings.rolling_windows,
             categories=learn_categories(history),
+            target_encoding=self.settings.target_encoding,
         )
         horizons = training_horizons(len(history), self.horizon, self.seed)
         feats = build_features(history, self.spec, horizons)

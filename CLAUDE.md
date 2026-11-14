@@ -75,7 +75,7 @@ baseline."* Every number must be reproducible from one command.
 │   ├── logging_config.py         # logging setup (not logging.py: avoid shadowing stdlib)
 │   ├── types.py                  # FloatArray/IntArray aliases, typed `cell()` accessor
 │   ├── data/                     # loader, subset, transform, validation, quality, splits, synthetic
-│   ├── features/                 # calendar, price, lags (>= horizon), origin (horizon-aware), builder
+│   ├── features/                 # calendar, price, lags (>= horizon), origin (horizon-aware), target_encoding, builder
 │   ├── models/                   # base (Forecaster contract), statistical, lgbm, registry
 │   ├── evaluation/               # metrics, backtest (rolling origin), explain (SHAP)
 │   ├── optimization/             # formulas, uncertainty, policies, simulator, scenario
@@ -102,7 +102,9 @@ baseline."* Every number must be reproducible from one command.
   error statistics) then 3 test windows (84 days; reporting + simulation only).
 - **Leakage safety**: fixed lags/rolling windows are `>= horizon`; *origin* features
   (horizon `h`, demand stats at `t - h`) restore recent information. Tests perturb future
-  targets and assert window features are unchanged — keep these tests passing.
+  targets and assert window features are unchanged; `tests/unit/features/test_leakage.py` checks
+  the whole feature matrix — keep these tests passing. Target encodings are expanding means
+  up to `t - horizon`, off by default (no validation gain).
 - **Models**: naive, seasonal naive, moving average, Croston, TSB, ETS(A,N,A) via
   statsforecast (conformal intervals); global LightGBM (Tweedie + P10/P90 quantile models).
 - **Metrics**: MAE, RMSE, bias, RMSSE, revenue-weighted WRMSSE (headline), pinball, coverage.

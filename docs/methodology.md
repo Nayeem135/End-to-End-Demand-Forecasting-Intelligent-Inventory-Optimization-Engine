@@ -77,9 +77,27 @@ and the feature values are read at `t − h`. This single change improved valida
 WRMSSE from 0.820 to 0.800 and made LightGBM's lead-time (7-day cumulative) error 8 %
 smaller than the moving average's.
 
-**Leakage tests.** For both lag and origin features, a unit test replaces all future
-targets with random numbers and asserts that the features of the forecast window do not
-change at all.
+**Target encodings (optional).** Expanding means of demand per item (across stores), per
+store × department and per department × weekday, each computed only from days on or
+before `t − horizon` (`MODEL__LGBM__TARGET_ENCODING=true`). On the validation folds they
+did not help (WRMSSE 0.7998 → 0.7997, MAE 1.0353 → 1.0359, +18 % training time) — item
+identity and the origin features already carry that information — so they are off by
+default and the reported results do not use them.
+
+**Leakage tests** (`tests/unit/features/test_leakage.py`) cover the *whole* feature matrix,
+every family at once:
+
+1. replacing every future target with random numbers leaves every feature of the
+   forecast window unchanged;
+2. changing one series' target on one day `s` changes no feature, of any series, dated
+   before `s + h` — and does change later ones, so the test cannot pass vacuously;
+3. lags 7/14/28 pass the same test with a 7-day horizon and are rejected with a 28-day
+   horizon (a 7-day lag would read the future);
+4. a fitted LightGBM predicts identically whatever the true future values are.
+
+To show the tests have teeth, two leaks were planted deliberately (target encodings using
+same-day data; rolling windows not shifted by the horizon): the suite failed 9 and 8
+tests respectively.
 
 ## 4. From forecast to inventory decision
 

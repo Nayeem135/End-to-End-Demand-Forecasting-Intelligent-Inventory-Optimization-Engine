@@ -10,6 +10,7 @@ from demand_engine.features.calendar import CALENDAR_FEATURES, add_calendar_feat
 from demand_engine.features.lags import add_lag_features, lag_feature_names
 from demand_engine.features.origin import ORIGIN_FEATURES, add_origin_features
 from demand_engine.features.price import PRICE_FEATURES, add_price_features
+from demand_engine.features.target_encoding import TE_FEATURES, add_target_encodings
 from demand_engine.types import IntArray
 
 CATEGORICAL_FEATURES = ("item_id", "dept_id", "cat_id", "store_id", "event_type")
@@ -24,6 +25,7 @@ class FeatureSpec:
     windows: list[int]
     categories: dict[str, list[str]] = field(default_factory=dict)
     origin: bool = True
+    target_encoding: bool = False
 
     @property
     def feature_names(self) -> list[str]:
@@ -34,6 +36,7 @@ class FeatureSpec:
             *PRICE_FEATURES,
             *lag_feature_names(self.lags, self.windows, self.horizon),
             *(ORIGIN_FEATURES if self.origin else ()),
+            *(TE_FEATURES if self.target_encoding else ()),
         ]
         if len(names) != len(set(names)):
             raise ValueError("duplicate feature names in feature specification")
@@ -65,6 +68,8 @@ def build_features(
         if horizons is None:
             raise ValueError("origin features need per-row horizons")
         out = add_origin_features(out, horizons)
+    if spec.target_encoding:
+        out = add_target_encodings(out, spec.horizon)
     for col in CATEGORICAL_FEATURES:
         cats = spec.categories.get(col)
         out[col] = pd.Categorical(out[col].astype(str), categories=cats)
