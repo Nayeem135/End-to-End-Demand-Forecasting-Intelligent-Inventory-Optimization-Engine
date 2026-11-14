@@ -73,5 +73,7 @@ jobs:
     needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
+      - name: Validate the docker-up stack (incl. MLflow profile)
+        run: docker compose --profile mlflow config --quiet
       - name: Build backend and dashboard images
         run: docker compose build api frontend

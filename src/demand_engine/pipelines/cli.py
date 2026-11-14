@@ -218,7 +218,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     """CLI entry point."""
     args = build_parser().parse_args(argv)
     settings = get_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.log_format)
     args.func(settings, args)
 
 

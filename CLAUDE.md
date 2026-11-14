@@ -141,7 +141,8 @@ baseline."* Every number must be reproducible from one command.
 ## Commands
 
 ```bash
-make setup | data | train | test | lint | api | app   # day-to-day entry points (see `make`)
+make setup | data | train | test | lint | run | docker-up | app   # entry points (see `make`)
+LOG_FORMAT=json make data                             # structured (JSON) logs; default is text
 uv run pre-commit run --all-files                     # same checks as the git hook
 uv sync                                     # install deps (Python 3.11 venv)
 uv run ruff check . && uv run ruff format --check .

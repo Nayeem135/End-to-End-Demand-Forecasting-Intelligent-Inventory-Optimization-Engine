@@ -178,6 +178,9 @@ class Settings(BaseSettings):
 
     seed: int = 42
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    log_format: Literal["text", "json"] = Field(
+        default="text", description="'text' for readable lines, 'json' for structured logs."
+    )
     mlflow_tracking_uri: str = Field(
         default="sqlite:///artifacts/mlflow.db",
         description="MLflow backend store; empty string disables tracking.",

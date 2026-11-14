@@ -32,7 +32,7 @@ is in [docs/methodology.md](docs/methodology.md).
 
 ## Dashboard
 
-Screenshots of the running React dashboard (`make api`, http://127.0.0.1:8000) on the
+Screenshots of the running React dashboard (`make run`, http://127.0.0.1:8000) on the
 results above.
 
 **Overview** — headline savings, cost breakdown by policy, and the cost / service-level
@@ -92,7 +92,7 @@ in the same format.
 make setup        # uv sync, frontend build, git hooks
 make data         # data/raw M5 CSVs -> data/processed/sales.parquet
 make train        # 7 models + backtests + inventory simulation (~9 min)
-make api          # embedded PostgreSQL + publish + API & React dashboard on :8000
+make run          # embedded PostgreSQL + publish + API & React dashboard on :8000
 make app          # alternative Streamlit dashboard on :8501 (no database needed)
 ```
 
@@ -103,8 +103,7 @@ Without `make`, the same commands are `uv run demand-engine ingest | run | demo`
 
 ```bash
 docker compose --profile pipeline run --rm pipeline   # run the pipeline + publish
-docker compose up --build                              # http://localhost:8080
-docker compose --profile mlflow up mlflow              # MLflow UI on http://localhost:5000
+make docker-up    # Postgres + API + dashboard (http://localhost:8080) + MLflow (http://localhost:5000)
 ```
 
 ### Development
